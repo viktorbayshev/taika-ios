@@ -1,0 +1,29 @@
+# xcode
+.DS_Store
+DerivedData/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+xcuserdata/
+
+# build
+build/
+*.ipa
+
+# swiftpm / tuist / cocoapods (если появятся)
+.swiftpm/
+Pods/
+Carthage/
+Tuist/.build/
+Tuist/Derived/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# secrets (на всякий)
+*.env
+*.p12
+*.mobileprovision

@@ -1,0 +1,43 @@
+
+
+TAIKA ARCHITECTURE — SINGLE SOURCE OF TRUTH
+
+Layers (per feature/module)
+1) Data — models, storage, config. No UI.
+2) DS (Design System) — ALL visuals: components, cards, sections, animations, tokens.
+3) Manager — business logic & state: fetching, mutations, progress, favorites, routing signals.
+4) View — screen assembly only: binds to Managers, passes data/handlers into DS. No drawing.
+
+Module layout (each follows Data/DS/Manager/View)
+- Course: CourseData, CourseDS, CourseManager, CourseView; sub: Lessons (…Data/DS/Manager/View), Steps, HomeTask.
+- Favorites: FavoriteData, FavoriteDS, FavoriteManager, FavoriteView.
+- Main: MainData, MainDS, MainView, ToolBar.
+- Theme: AppDS (base controls), CardDS (cards/tiles), ThemeDesign (tokens).
+- Session: ProgressManager, UserSession.
+- Speaker, Profile, Welcome … — same 4‑layer pattern.
+
+Interaction flow
+UI (View/DS) → Manager → Data → Manager → View → DS re-renders.
+Taps in View call Manager. Manager updates state/data. View passes new props to DS.
+
+Where to change what
+- Change visuals of chips/buttons → AppDS.
+- Change visuals of course sections/cards → CourseDS / CardDS.
+- Change logic (progress, favorites, filters) → Managers.
+- Change screen composition/order → corresponding View.
+
+GUARDRAILS (hard rules)
+- DS = ONLY place that draws UI. View NEVER draws UI.
+- Managers contain NO UI. Only business logic and state.
+- One source of truth per component/section: defined in exactly one DS file. No duplicates.
+- View holds only UI state and wiring to Managers; no domain data storage.
+- In ViewBuilders: precompute data (no `let` as view).
+- `CDSectionWithAction(action:)` expects a View → provide Button/Text, not `Void` code.
+- No debug markers in source (e.g., ``).
+
+Checklist before commit
+[ ] Visual edited in DS (not in View)
+[ ] Public DS API used by View
+[ ] Managers isolated from DS
+[ ] Target membership correct & outside `#if DEBUG`
+[ ] No duplicate implementations

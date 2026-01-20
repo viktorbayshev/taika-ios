@@ -2,9 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>speaker practice needs speech recognition access</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>speaker practice needs microphone access</string>
 	<key>UIAppFonts</key>
 	<array>
+		<string>Nexa-Book_0.otf</string>
 		<string>Onmark TRIAL Regular.otf</string>
+		<string>HP001Full1-Medium_2.ttf</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>

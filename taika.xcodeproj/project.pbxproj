@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		15194D332E6C6B5B00F57D9B /* lessons.json in Resources */ = {isa = PBXBuildFile; fileRef = 15194D322E6C6B5B00F57D9B /* lessons.json */; };
+		151AE3CF2E6DCCCB00746E8E /* steps.json in Resources */ = {isa = PBXBuildFile; fileRef = 151AE3CE2E6DCCCB00746E8E /* steps.json */; };
+		158E96752EDDD24F00C4E831 /* taikafm.json in Resources */ = {isa = PBXBuildFile; fileRef = 158E96742EDDD24F00C4E831 /* taikafm.json */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		158B021A2E59B31900EBEA0E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,10 +30,14 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		15194D322E6C6B5B00F57D9B /* lessons.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = lessons.json; sourceTree = "<group>"; };
+		151AE3CE2E6DCCCB00746E8E /* steps.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = steps.json; sourceTree = "<group>"; };
 		158B02052E59B31600EBEA0E /* taika.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = taika.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		158B02192E59B31900EBEA0E /* taikaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = taikaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		158B02232E59B31900EBEA0E /* taikaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = taikaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		158B02402E59B67000EBEA0E /* Onmark TRIAL Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "Onmark TRIAL Regular.otf"; path = "taika/Theme/Onmark TRIAL Regular.otf"; sourceTree = "<group>"; };
+		158B025C2E5AEC0C00EBEA0E /* taika_basa_course.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = taika_basa_course.json; path = taika/Resourses/taika_basa_course.json; sourceTree = "<group>"; };
+		158E96742EDDD24F00C4E831 /* taikafm.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = taikafm.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -35,7 +45,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				Profile/Untitled.swift,
 			);
 			target = 158B02042E59B31600EBEA0E /* taika */;
 		};
@@ -90,6 +99,10 @@
 		158B01FC2E59B31600EBEA0E = {
 			isa = PBXGroup;
 			children = (
+				151AE3CE2E6DCCCB00746E8E /* steps.json */,
+				158E96742EDDD24F00C4E831 /* taikafm.json */,
+				15194D322E6C6B5B00F57D9B /* lessons.json */,
+				158B025C2E5AEC0C00EBEA0E /* taika_basa_course.json */,
 				158B02402E59B67000EBEA0E /* Onmark TRIAL Regular.otf */,
 				158B02072E59B31600EBEA0E /* taika */,
 				158B021C2E59B31900EBEA0E /* taikaTests */,
@@ -228,6 +241,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				151AE3CF2E6DCCCB00746E8E /* steps.json in Resources */,
+				158E96752EDDD24F00C4E831 /* taikafm.json in Resources */,
+				15194D332E6C6B5B00F57D9B /* lessons.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

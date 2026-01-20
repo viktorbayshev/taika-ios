@@ -1,4 +1,3 @@
-
 //
 //  taikaApp.swift
 //  taika
@@ -12,8 +11,7 @@ import SwiftUI
 struct taikaApp: App {
     var body: some Scene {
         WindowGroup {
-            // Root screen of the app
-            ContentView()
+            AppShell()
         }
     }
 }
