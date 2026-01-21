@@ -126,8 +126,58 @@ final class SpeakerManager: ObservableObject {
         guard !queue.isEmpty else { return }
         if let match = queue.first(where: { resolveId($0) == id }) {
             current = match
-            // t1: keep "current lesson" source-of-truth in sync
+            // A1: keep "current lesson" source-of-truth in sync
             session.markActive(courseId: match.courseId, lessonId: match.lessonId, stepIndex: match.index)
+            
+            // B3: restore persisted attempt result for this card
+            restoreAttemptResult(for: match)
+        }
+    }
+    
+    // B3: restore persisted attempt result for a card
+    private func restoreAttemptResult(for resolved: StepData.SpeakerResolved) {
+        let key = SpeakerAttemptsStore.key(
+            courseId: resolved.courseId,
+            lessonId: resolved.lessonId,
+            stepIndex: resolved.index
+        )
+        
+        if let stored = SpeakerAttemptsStore.load(forKey: key) {
+            heardThai = stored.heardThai
+            heardTranslit = stored.heardTranslit
+            heardConfidence = stored.heardConfidence
+            attemptCount = stored.attemptCount
+            
+            // restore audio URL if file still exists
+            if let path = stored.lastAttemptURL,
+               let url = URL(string: path),
+               FileManager.default.fileExists(atPath: url.path) {
+                lastAttemptURL = url
+                lastAttempt = url
+            } else {
+                lastAttemptURL = nil
+                lastAttempt = nil
+            }
+            
+            // restore phase based on stored result
+            if stored.heardConfidence > 0 {
+                // B3: maintain consistency with initial feedback display - clear heardRU to prevent fake RU recognition
+                heardRU = nil
+                let hint = feedbackHint(for: stored.heardConfidence)
+                phase = .feedback(score: stored.heardConfidence, hint: hint)
+                taikaHints = [
+                    resolved.face.titleRU.isEmpty ? "оценка: \(stored.heardConfidence)" : "фраза: \(resolved.face.titleRU)",
+                    "оценка: \(stored.heardConfidence)",
+                    hint
+                ]
+            } else {
+                // B3: clear heardRU when score is 0 to prevent stale value from previous card
+                heardRU = nil
+                phase = .idle
+                taikaHints = []
+            }
+        } else {
+            // no stored result - reset to clean state
             heardThai = nil
             heardRU = nil
             heardTranslit = nil
@@ -137,9 +187,20 @@ final class SpeakerManager: ObservableObject {
             lastAttemptURL = nil
             lastAttempt = nil
             attemptCount = 0
-            lastPlayed = .none
-            attemptPlayer?.stop()
-            attemptPlayer = nil
+        }
+        
+        lastPlayed = .none
+        attemptPlayer?.stop()
+        attemptPlayer = nil
+    }
+    
+    // B3: helper to generate feedback hint from score
+    private func feedbackHint(for score: Int) -> String {
+        switch score {
+        case 92...100: return "очень похоже. попробуй быстрее и слитно"
+        case 78...91: return "норм. добей окончания и тон"
+        case 60...77: return "слышно похоже, но есть ошибки. сравни по слогам"
+        default: return "пока мимо. включи эталон и повторяй по 1–2 слога"
         }
     }
 
@@ -273,6 +334,10 @@ final class SpeakerManager: ObservableObject {
 
     private func pickFirst() {
         current = queue.first
+        // A1: keep "current lesson" source-of-truth in sync when picking first card
+        if let cur = current {
+            session.markActive(courseId: cur.courseId, lessonId: cur.lessonId, stepIndex: cur.index)
+        }
     }
 
     // MARK: - navigation
@@ -289,21 +354,31 @@ final class SpeakerManager: ObservableObject {
         let nextIndex = (i + 1) % queue.count
         current = queue[nextIndex]
         if let cur = current {
-            // t1: keep "current lesson" source-of-truth in sync
+            // A1: keep "current lesson" source-of-truth in sync
             session.markActive(courseId: cur.courseId, lessonId: cur.lessonId, stepIndex: cur.index)
+            // B3: restore persisted attempt result
+            restoreAttemptResult(for: cur)
         }
-        heardThai = nil
-        heardRU = nil
-        heardTranslit = nil
-        heardConfidence = 0
-        taikaHints = []
-        phase = .idle
-        lastAttemptURL = nil
-        lastAttempt = nil
-        attemptCount = 0
-        lastPlayed = .none
-        attemptPlayer?.stop()
-        attemptPlayer = nil
+    }
+    
+    // C1: prev navigation for player panel
+    func prev() {
+        guard !queue.isEmpty else {
+            current = nil
+            return
+        }
+        guard let cur = current, let i = queue.firstIndex(of: cur) else {
+            current = queue.first
+            return
+        }
+        let prevIndex = (i - 1 + queue.count) % queue.count
+        current = queue[prevIndex]
+        if let cur = current {
+            // A1: keep "current lesson" source-of-truth in sync
+            session.markActive(courseId: cur.courseId, lessonId: cur.lessonId, stepIndex: cur.index)
+            // B3: restore persisted attempt result
+            restoreAttemptResult(for: cur)
+        }
     }
 
     func repeatCurrent() {
@@ -628,9 +703,14 @@ final class SpeakerManager: ObservableObject {
                     ]
                     self.phase = .hint
                 } else {
+                    // B2: calculate similarity and score (0-100)
                     let sim = self.similarity(a: heard, b: refThai)
                     let score = Int((sim * 100.0).rounded())
                     self.heardConfidence = score
+
+                    // B2: match threshold (70) - only scores >= 70 are considered matches
+                    let matchThreshold = 70
+                    let isMatch = score >= matchThreshold
 
                     let hint: String
                     switch score {
@@ -650,7 +730,20 @@ final class SpeakerManager: ObservableObject {
                         "оценка: \(score)",
                         hint
                     ]
+                    // B2: feedback phase includes score; DS will check threshold for match verdict
                     self.phase = .feedback(score: score, hint: hint)
+                    
+                    // B3: persist attempt result
+                    self.saveAttemptResult(
+                        courseId: cur.courseId,
+                        lessonId: cur.lessonId,
+                        stepIndex: cur.index,
+                        heardThai: heard,
+                        heardTranslit: nil,
+                        heardConfidence: score,
+                        attemptCount: self.attemptCount,
+                        lastAttemptURL: url
+                    )
                 }
 
                 // analytics
@@ -813,35 +906,49 @@ final class SpeakerManager: ObservableObject {
     private func buildCurrentLessonQueue() -> [StepData.SpeakerResolved] {
         guard let ids = resolveCurrentLessonIds() else { return [] }
 
-        // Resolve steps of the lesson by probing indices until we stop finding items.
+        // A2: Resolve steps of the lesson by probing indices until we stop finding items.
         // No hardcoded 0..<200: we derive a reasonable bound from session state.
         var out: [StepData.SpeakerResolved] = []
-        out.reserveCapacity(32)
+        out.reserveCapacity(64)
 
         // bound hint from snapshot (last known step index for this lesson)
         let lessonKey = "\(ids.courseId)|\(ids.lessonId)"
         let lastIdx = session.snapshot.lastStepByLesson[lessonKey] ?? 0
 
-        // We try a bit beyond the last seen index to cover newly added steps.
-        // Guarantee a minimum scan window so fresh users still get something.
-        let upperBound = max(24, lastIdx + 24)
+        // A2: Start from 0-based index, scan until we hit a streak of misses.
+        // Use lastIdx as a hint, but continue scanning beyond it if we find content.
+        // Maximum reasonable bound: 200 steps per lesson (safety limit).
+        let maxBound = 200
+        let initialUpperBound = min(maxBound, max(32, lastIdx + 32)) // at least 32, or lastIdx+32
 
         var missStreak = 0
+        // A2: Always start from 0 to ensure we don't miss steps at the beginning of the lesson
+        // The lastIdx hint is used for initialUpperBound calculation, not for starting position
         var idx = 0
-        while idx <= upperBound {
+        var foundAny = false
+        
+        // Scan from 0 to maxBound, or until we hit a streak of misses after finding content
+        while idx < maxBound {
             if let r = stepData.speakerResolved(courseId: ids.courseId, lessonId: ids.lessonId, index: idx) {
                 out.append(r)
                 missStreak = 0
+                foundAny = true
             } else {
                 missStreak += 1
-                // tolerate holes, but if we already found content and then hit a streak → stop
-                if !out.isEmpty && missStreak >= 6 { break }
+                // A2: If we found content and then hit a streak of 8 misses, stop (tolerate small holes)
+                if foundAny && missStreak >= 8 {
+                    break
+                }
+                // A2: If we haven't found anything yet and we're past initialUpperBound, stop
+                if !foundAny && idx >= initialUpperBound {
+                    break
+                }
             }
             idx += 1
         }
 
         out = dedupResolved(out)
-        // stable order by canonical index
+        // A2: stable order by canonical index (0-based)
         out.sort { $0.index < $1.index }
         return out
     }
@@ -929,6 +1036,38 @@ final class SpeakerManager: ObservableObject {
             b[8], b[9], b[10], b[11],
             b[12], b[13], b[14], b[15]
         ))
+    }
+
+    // B3: save attempt result to persistence
+    private func saveAttemptResult(
+        courseId: String,
+        lessonId: String,
+        stepIndex: Int,
+        heardThai: String?,
+        heardTranslit: String?,
+        heardConfidence: Int,
+        attemptCount: Int,
+        lastAttemptURL: URL?
+    ) {
+        let key = SpeakerAttemptsStore.key(
+            courseId: courseId,
+            lessonId: lessonId,
+            stepIndex: stepIndex
+        )
+        
+        let result = SpeakerAttemptResult(
+            courseId: courseId,
+            lessonId: lessonId,
+            stepIndex: stepIndex,
+            heardThai: heardThai,
+            heardTranslit: heardTranslit,
+            heardConfidence: heardConfidence,
+            attemptCount: attemptCount,
+            lastAttemptURL: lastAttemptURL?.absoluteString,
+            timestamp: Date()
+        )
+        
+        SpeakerAttemptsStore.save(attempt: result, forKey: key)
     }
 
     // MARK: - dedup

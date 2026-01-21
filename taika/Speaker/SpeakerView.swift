@@ -102,6 +102,7 @@ struct SpeakerView: View {
             },
             onMicTap: onMicTap,
             onNext: { speaker.next() },
+            onPrev: { speaker.prev() },
             onRepeat: { speaker.repeatCurrent() },
             onSubmitText: { text in
                 speaker.submitText(text)
@@ -110,12 +111,17 @@ struct SpeakerView: View {
                 speaker.applyFilter(id)
             },
             onSelectCard: { id in
+                // Bug 2: check phase BEFORE selectCard to avoid checking the new card's restored phase
+                let oldPhase = speaker.phase
                 speaker.selectCard(by: id)
                 // when user switches cards, keep UI in a stable state
-                if speaker.phase == .recording {
+                if oldPhase == .recording {
                     speaker.stopAttemptAndAnalyze()
-                } else if speaker.phase == .analyzing || speaker.phase == .analyzingTranslation {
+                } else if oldPhase == .analyzing || oldPhase == .analyzingTranslation {
                     // do nothing; analysis will finish for the previous attempt
+                } else if speaker.phase == .feedback {
+                    // Bug 2: if new card has restored feedback state, preserve it (don't call repeatCurrent)
+                    // The restored state is already set by restoreAttemptResult in selectCard
                 } else {
                     // snap back to idle/hint (manager will provide hints)
                     speaker.repeatCurrent()
