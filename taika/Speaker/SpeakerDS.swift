@@ -47,6 +47,7 @@ public struct SpeakerDSRoot: View {
         let onPlayReferenceForId: ((UUID) -> Void)?
         let onMicTap: () -> Void
         let onNext: () -> Void
+        let onPrev: (() -> Void)?
         let onRepeat: () -> Void
         let onSubmitText: (String) -> Void
         let onSelectFilter: (UUID) -> Void
@@ -161,6 +162,7 @@ public struct SpeakerDSRoot: View {
         onPlayReferenceForId: ((UUID) -> Void)? = nil,
         onMicTap: @escaping () -> Void,
         onNext: @escaping () -> Void,
+        onPrev: (() -> Void)? = nil,
         onRepeat: @escaping () -> Void,
         onSubmitText: @escaping (String) -> Void = { _ in },
         onSelectFilter: @escaping (UUID) -> Void = { _ in },
@@ -192,6 +194,7 @@ public struct SpeakerDSRoot: View {
             onPlayReferenceForId: onPlayReferenceForId,
             onMicTap: onMicTap,
             onNext: onNext,
+            onPrev: onPrev,
             onRepeat: onRepeat,
             onSubmitText: onSubmitText,
             onSelectFilter: onSelectFilter,
@@ -683,6 +686,7 @@ public struct SpeakerDSRoot: View {
         let canPlayMain: Bool = !disabledGlobal && (hasAttempt || true)
 
         HStack(spacing: 14) {
+            // bug-01: player panel should not block carousel gestures - use buttonStyle(.plain) and limit hit area
             // speaker (reference) — only when attempt exists, otherwise redundant
             if hasAttempt {
                 Button {
@@ -701,6 +705,7 @@ public struct SpeakerDSRoot: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(disabledGlobal)
+                .allowsHitTesting(true) // bug-01: explicit hit testing, don't block carousel
             }
 
             // play/pause (single)
@@ -745,7 +750,23 @@ public struct SpeakerDSRoot: View {
             .buttonStyle(.plain)
             .disabled(isAnalyzing)
 
-            // next
+            // C1: prev button (player-style navigation)
+            if let onPrev = external?.onPrev {
+                Button {
+                    guard !disabledGlobal else { return }
+                    onPrev()
+                } label: {
+                    speakerTransportIcon(
+                        system: "backward.end.fill",
+                        isActive: false,
+                        isDisabled: disabledGlobal
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(disabledGlobal)
+            }
+            
+            // C1: next button (player-style navigation)
             Button {
                 guard !disabledGlobal else { return }
                 external?.onNext()
@@ -808,39 +829,8 @@ public struct SpeakerDSRoot: View {
             Group {
                 let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
 
-                if phase.isFeedback {
-                    // freeze: show only the active card centered (no transforms / no scroll)
-                    let activeId = currentId
-                    let activeItem = items.first(where: { $0.id == activeId }) ?? items.first!
-
-                    SpeakerTopCard(
-                        item: activeItem,
-                        isActive: true,
-                        phase: phase,
-                        recordingPartialTranslit: recordingPartialTranslit,
-                        recordingMeter: recordingMeter,
-                        heardRU: external?.heardRU,
-                        heardTranslit: external?.heardTranslit,
-                        heardConfidence: heardConfidenceValue,
-                        canPlayAttempt: (external?.lastAttempt != nil),
-                        attemptCount: (external?.attemptCount ?? 0),
-                        lastPlayed: (external?.lastPlayed ?? .none),
-                        onPlayReference: {
-                            if let cb = external?.onPlayReferenceForId {
-                                cb(activeItem.id)
-                            } else {
-                                external?.onPlayReference()
-                            }
-                        },
-                        onPlayAttempt: {
-                            external?.onPlayAttempt()
-                        }
-                    )
-                    .scaleEffect(1.04)
-                    .frame(width: itemW, height: itemH)
-                    .frame(maxWidth: .infinity, alignment: .center)
-
-                } else if isPreview {
+                // bug-01: always allow swipe, even in feedback phase
+                if isPreview {
                     // previews: avoid ScrollViewReader/GeometryReader/scrollTo loops that can stall canvas.
                     // show a stable, static mini-strip with tap selecting but no auto-scroll.
                     let activeId = currentId
@@ -938,7 +928,8 @@ public struct SpeakerDSRoot: View {
                                         .frame(width: itemW, height: itemH)
                                         .id(it.id)
                                         .contentShape(Rectangle())
-                                        .highPriorityGesture(
+                                        .simultaneousGesture(
+                                            // bug-01: allow double-tap for reference, but don't block swipe
                                             TapGesture(count: 2).onEnded {
                                                 if let cb = external?.onPlayReferenceForId {
                                                     cb(it.id)
@@ -948,6 +939,7 @@ public struct SpeakerDSRoot: View {
                                             }
                                         )
                                         .onTapGesture {
+                                            // bug-01: single tap selects and scrolls to center
                                             localSelectedId = it.id
                                             external?.onSelectCard(it.id)
                                             withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
@@ -963,6 +955,24 @@ public struct SpeakerDSRoot: View {
                             .onAppear {
                                 guard let id = currentId else { return }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                                    withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                                        proxy.scrollTo(id, anchor: .center)
+                                    }
+                                }
+                            }
+                            // bug-01: sync carousel scroll with player navigation
+                            .onChange(of: extSelectedId) { oldId, newId in
+                                guard let id = newId, id != oldId else { return }
+                                DispatchQueue.main.async {
+                                    withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                                        proxy.scrollTo(id, anchor: .center)
+                                    }
+                                }
+                            }
+                            .onChange(of: localSelectedId) { oldId, newId in
+                                // only sync if extSelectedId is nil (local takes precedence when external is not set)
+                                guard extSelectedId == nil, let id = newId, id != oldId else { return }
+                                DispatchQueue.main.async {
                                     withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
                                         proxy.scrollTo(id, anchor: .center)
                                     }
@@ -1126,7 +1136,7 @@ public struct SpeakerDSRoot: View {
     }
 
     private var filtersStrip: some View {
-        // carousel-like: outline pills + depth hint
+        // bug-03: restore visible filters with proper styling
         let items = modeFilters
         let activeIdx = items.firstIndex(where: { $0.isActive }) ?? 0
 
@@ -1148,7 +1158,14 @@ public struct SpeakerDSRoot: View {
                             .padding(.vertical, 8)
                             .background(
                                 Capsule(style: .continuous)
-                                    .fill(Color.clear)
+                                    .fill(isActive ? Color.white.opacity(0.08) : Color.clear)
+                                    .overlay(
+                                        Capsule(style: .continuous)
+                                            .stroke(
+                                                isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.06),
+                                                lineWidth: 1
+                                            )
+                                    )
                             )
                     }
                     .buttonStyle(.plain)
@@ -1382,10 +1399,13 @@ private struct SpeakerTopCard: View {
     }
 
     @ViewBuilder private var phaseBadge: some View {
+        // bug-02: restore all phase badges for visibility
         if isResultActive {
             resultBadge
         } else if isRecordingActive {
             recordingBadge
+        } else if isAnalyzingActive {
+            analyzingBadge
         } else {
             EmptyView()
         }

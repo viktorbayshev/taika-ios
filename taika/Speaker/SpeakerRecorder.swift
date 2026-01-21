@@ -150,15 +150,18 @@ final class SpeakerRecorder: NSObject, ObservableObject, SpeakerRecording {
         status = .stopping
         lastErrorMessage = nil
 
-        // idempotent: safe to call multiple times
-        recorder?.stop()
-        recorder = nil
-
-        // if we were not recording, treat as stopFailed but keep idempotent behavior
-        if !isRecording {
+        // B1: idempotent: safe to call multiple times
+        guard isRecording else {
+            // B1: explicit contract: if not recording, return nil with clear status
             status = .stopFailed
             lastErrorMessage = "stop called while not recording"
+            NotificationCenter.default.post(name: .speakerRecorderDidStop, object: lastAttemptSummary())
+            return nil
         }
+
+        recorder?.stop()
+        let recorderWasValid = (recorder != nil)
+        recorder = nil
 
         stopLiveTranscription()
         partialText = ""
@@ -166,21 +169,26 @@ final class SpeakerRecorder: NSObject, ObservableObject, SpeakerRecording {
         stopLevelMeter()
         isRecording = false
 
+        // B1: explicit contract: validate audio file exists and has content
         let url = currentAudioURL()
         if url == nil {
             status = .stopFailed
-            lastErrorMessage = lastErrorMessage ?? "no audio file"
+            lastErrorMessage = recorderWasValid ? "no audio file created" : "recorder was nil"
+            NotificationCenter.default.post(name: .speakerRecorderDidStop, object: lastAttemptSummary())
+            
+            do {
+                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            } catch {}
+            return nil
         }
 
+        // B1: success: valid URL returned, status -> idle
+        status = .idle
         NotificationCenter.default.post(name: .speakerRecorderDidStop, object: lastAttemptSummary())
 
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         } catch {}
-
-        if url != nil {
-            status = .idle
-        }
 
         return url
     }
